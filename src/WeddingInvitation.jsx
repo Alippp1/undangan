@@ -38,7 +38,7 @@ const CONFIG = {
   resepsi: {
     label: "Resepsi",
     date: "2026-02-14T11:00:00",
-    dateDisplay: "Minggu, 14 Februari 2026",
+    dateDisplay: "Sabtu, 5 september 2026",
     time: "11.00 – 14.00 WIB",
     address: "BUMI SAMAMI\Jl. Terusan Cigadung No.15, Sekeloa, Kecamatan Coblong, Kota Bandung, Jawa Barat 401",
   },
