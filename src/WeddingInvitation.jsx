@@ -30,15 +30,15 @@ const CONFIG = {
   loveNote: "Dengan segala puji bagi Allah yang telah menciptakan makhluk-Nya berpasang-pasangan, Ya Allah izinkanlah kami merangkaikan cinta yang Engkau berikan dalam ikatan pernikahan.",
   akad: {
     label: "Akad Nikah",
-    date: "2027-02-14T08:00:00",
+    date: "2026-02-14T08:00:00",
     dateDisplay: "Sabtu, 5 september 2026",
     time: "15.30 – 17.30 WIB",
     address: "BUMI SAMAMI\Jl. Terusan Cigadung No.15, Sekeloa, Kecamatan Coblong, Kota Bandung, Jawa Barat 401",
   },
   resepsi: {
     label: "Resepsi",
-    date: "2027-02-14T11:00:00",
-    dateDisplay: "Minggu, 14 Februari 2027",
+    date: "2026-02-14T11:00:00",
+    dateDisplay: "Minggu, 14 Februari 2026",
     time: "11.00 – 14.00 WIB",
     address: "BUMI SAMAMI\Jl. Terusan Cigadung No.15, Sekeloa, Kecamatan Coblong, Kota Bandung, Jawa Barat 401",
   },
@@ -52,7 +52,13 @@ const CONFIG = {
 
   heroVideo: {
     src: "https://youtu.be/z-Ct1yrE90Q",
-    poster: "/video/videos.mp4",
+    // "poster" HARUS berupa gambar (jpg/png) — dipakai sebagai layar
+    // pembuka sebelum video YouTube termuat. Ganti ke foto cover kamu.
+    poster: "/photos/satu.png",
+    // (opsional) video mp4 yang di-hosting sendiri, dipakai sebagai
+    // video latar bergerak di layar amplop sebelum tombol "OPEN THE
+    // ENVELOPE" ditekan. Kosongkan jika tidak punya file video ini.
+    bgVideoSrc: "/video/videos.mp4",
   },
 
   gallery: [
@@ -72,7 +78,7 @@ const CONFIG = {
     "/photos/empatbelas.png",
     "/photos/limabelas.png",
     "/photos/enambelas.png",
-    "/photos/tujuhbelas.png",
+    // "/photos/tujuhbelas.png",
   ],
 
   gifts: {
@@ -183,6 +189,38 @@ function Reveal({ children, className = "", delay = 0 }) {
   );
 }
 
+/* Menghitung ukuran "cover" (px) sebuah kotak video/iframe terhadap
+   ukuran ASLI containernya (bukan vw/vh viewport), supaya tetap pas
+   dan tidak "kebesaran"/terpotong aneh di HP — termasuk saat address
+   bar browser mobile muncul/hilang dan mengubah tinggi viewport. */
+function useCoverDimensions(containerRef, aspect = 16 / 9) {
+  const [dims, setDims] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      const cw = el.clientWidth;
+      const ch = el.clientHeight;
+      if (!cw || !ch) return;
+      const containerAspect = cw / ch;
+      if (containerAspect > aspect) {
+        setDims({ width: cw, height: cw / aspect });
+      } else {
+        setDims({ width: ch * aspect, height: ch });
+      }
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener("orientationchange", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("orientationchange", update);
+    };
+  }, [containerRef, aspect]);
+  return dims;
+}
+
 /* Botanical divider — the signature line-art motif reused across sections */
 function Sprig({ color = "#8A9A7E", width = 120 }) {
   return (
@@ -266,9 +304,15 @@ const [giftOpen, setGiftOpen] = useState(false);
   const heroPlayerRef = useRef(null);
   const floatPlayerRef = useRef(null);
   const heroRef = useRef(null);
+  const floatBoxRef = useRef(null);
   const bgAudioRef = useRef(null);
 
   const akadLeft = useCountdown(CONFIG.akad.date);
+
+  // Ukuran "cover" video YouTube dihitung dari ukuran asli container
+  // (bukan vw/vh) supaya tidak kebesaran/terzoom aneh di layar HP.
+  const heroDims = useCoverDimensions(heroRef, 16 / 9);
+  const floatDims = useCoverDimensions(floatBoxRef, 16 / 9);
 
   // Scroll → toggle floating mini player once hero is mostly out of view
   useEffect(() => {
@@ -480,22 +524,20 @@ const [giftOpen, setGiftOpen] = useState(false);
         .gallery-hover-overlay:hover .gallery-hover-icon { opacity: 1 !important; }
         .gallery-hover-icon { transition: opacity .2s ease; }
 
-        /* Fill-the-container trick for a YouTube iframe (cover, not letterboxed) */
-        .yt-cover-hero { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
-        .yt-cover-hero iframe {
-          position: absolute; top: 50%; left: 50%;
-          width: 100vw; height: 56.25vw;      /* 16:9 */
-          min-height: 100%; min-width: 177.78vh; /* 16:9 */
-          transform: translate(-50%, -50%);
-          border: 0;
+        /* Grid galeri prewedding — kolom tetap & rasio foto seragam supaya
+           rapi di semua ukuran layar, termasuk HP kecil. */
+        .gallery-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 8px;
         }
-        .yt-cover-mini { position: relative; width: 100%; height: 100%; overflow: hidden; }
-        .yt-cover-mini iframe {
-          position: absolute; top: 50%; left: 50%;
-          width: 260%; height: 260%;
-          transform: translate(-50%, -50%);
-          border: 0; pointer-events: none;
+        @media (min-width: 560px) {
+          .gallery-grid { grid-template-columns: repeat(3, 1fr); gap: 12px; }
         }
+        @media (min-width: 900px) {
+          .gallery-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; }
+        }
+        .gallery-item { aspect-ratio: 3 / 4; }
       `}</style>
 
       {/* Musik latar — auto-play saat amplop dibuka, otomatis mengulang saat selesai */}
@@ -504,107 +546,125 @@ const [giftOpen, setGiftOpen] = useState(false);
       {/* ================= COVER ================= */}
       {!opened && (
         <div
-          style={{
-            position: "fixed", inset: 0, zIndex: 60,
-            backgroundImage: `linear-gradient(180deg, rgba(37,50,31,0.35), rgba(20,26,16,0.75)), url(${CONFIG.heroVideo.poster})`,
-            backgroundSize: "cover", backgroundPosition: "center",
-          }}
-          className="flex flex-col items-center justify-center text-center px-6"
+          style={{ position: "fixed", inset: 0, zIndex: 60, overflow: "hidden", background: "#141a10" }}
         >
-          <Sprig color="#E7DFC6" width={90} />
-          <p style={{ color: "#E7DFC6", fontSize: "clamp(11px,3vw,14px)", marginTop: 6, letterSpacing: "0.08em" }}>
-            {CONFIG.akad.dateDisplay}
-          </p>
+          {/* Video latar layar amplop — pakai object-fit: cover asli
+              browser, jadi otomatis pas di HP tanpa hitungan vw/vh manual. */}
+          <video
+            src={CONFIG.heroVideo.bgVideoSrc || undefined}
+            poster={CONFIG.heroVideo.poster}
+            autoPlay
+            muted
+            loop
+            playsInline
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }}
+          />
+          <div
+            style={{
+              position: "absolute", inset: 0,
+              background: "linear-gradient(180deg, rgba(37,50,31,0.35), rgba(20,26,16,0.75))",
+            }}
+          />
 
-          {/* ================= ENVELOPE ================= */}
-          <div style={{ width: "100%", maxWidth: 320, margin: "0 auto" }}>
-            <div
-              style={{
-                position: "relative",
-                background: "#f4f1e8",
-                borderRadius: 4,
-                boxShadow: "0 16px 40px rgba(0,0,0,0.25)",
-                padding: "24px 20px 20px",
-                overflow: "hidden",
-              }}
-            >
-              {/* flap segitiga atas */}
+          <div
+            className="flex flex-col items-center justify-center text-center px-6"
+            style={{ position: "relative", zIndex: 1, height: "100%" }}
+          >
+            <Sprig color="#E7DFC6" width={90} />
+            <p style={{ color: "#E7DFC6", fontSize: "clamp(11px,3vw,14px)", marginTop: 6, letterSpacing: "0.08em" }}>
+              {CONFIG.akad.dateDisplay}
+            </p>
+
+            {/* ================= ENVELOPE ================= */}
+            <div style={{ width: "100%", maxWidth: 320, margin: "0 auto" }}>
               <div
                 style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: 0,
-                  borderLeft: "160px solid transparent",
-                  borderRight: "160px solid transparent",
-                  borderTop: "78px solid rgba(0,0,0,0.05)",
+                  position: "relative",
+                  background: "#f4f1e8",
+                  borderRadius: 4,
+                  boxShadow: "0 16px 40px rgba(0,0,0,0.25)",
+                  padding: "24px 20px 20px",
+                  overflow: "hidden",
                 }}
-              />
-              {/* garis diagonal flap */}
-              <svg
-                style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 78 }}
-                viewBox="0 0 320 78"
-                preserveAspectRatio="none"
               >
-                <line x1="0" y1="0" x2="160" y2="72" stroke="rgba(0,0,0,0.15)" strokeWidth="1" />
-                <line x1="320" y1="0" x2="160" y2="72" stroke="rgba(0,0,0,0.15)" strokeWidth="1" />
-              </svg>
-
-              <div style={{ position: "relative", marginTop: 8 }}>
-                <p className="font-display" style={{ fontSize: "clamp(11px,3vw,13px)", color: palette.forest, letterSpacing: "0.05em" }}>
-                  The Wedding of
-                </p>
-
-                <h3 className="font-display italic" style={{ fontSize: "clamp(20px,6vw,26px)", color: palette.gold, margin: "3px 0 12px" }}>
-                  {CONFIG.groom.name} &amp; {CONFIG.bride.name}
-                </h3>
-
-                {/* wax seal */}
+                {/* flap segitiga atas */}
                 <div
                   style={{
-                    width: 38,
-                    height: 38,
-                    margin: "0 auto 12px",
-                    borderRadius: "50%",
-                    background: "radial-gradient(circle at 35% 30%, #b5443a, #7a1f1f)",
-                    boxShadow: "0 3px 8px rgba(0,0,0,0.35)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: 0,
+                    borderLeft: "160px solid transparent",
+                    borderRight: "160px solid transparent",
+                    borderTop: "78px solid rgba(0,0,0,0.05)",
                   }}
+                />
+                {/* garis diagonal flap */}
+                <svg
+                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 78 }}
+                  viewBox="0 0 320 78"
+                  preserveAspectRatio="none"
                 >
-                  <Heart size={14} color="rgba(255,255,255,0.85)" fill="rgba(255,255,255,0.5)" />
+                  <line x1="0" y1="0" x2="160" y2="72" stroke="rgba(0,0,0,0.15)" strokeWidth="1" />
+                  <line x1="320" y1="0" x2="160" y2="72" stroke="rgba(0,0,0,0.15)" strokeWidth="1" />
+                </svg>
+
+                <div style={{ position: "relative", marginTop: 8 }}>
+                  <p className="font-display" style={{ fontSize: "clamp(11px,3vw,13px)", color: palette.forest, letterSpacing: "0.05em" }}>
+                    The Wedding of
+                  </p>
+
+                  <h3 className="font-display italic" style={{ fontSize: "clamp(20px,6vw,26px)", color: palette.gold, margin: "3px 0 12px" }}>
+                    {CONFIG.groom.name} &amp; {CONFIG.bride.name}
+                  </h3>
+
+                  {/* wax seal */}
+                  <div
+                    style={{
+                      width: 38,
+                      height: 38,
+                      margin: "0 auto 12px",
+                      borderRadius: "50%",
+                      background: "radial-gradient(circle at 35% 30%, #b5443a, #7a1f1f)",
+                      boxShadow: "0 3px 8px rgba(0,0,0,0.35)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                  >
+                    <Heart size={14} color="rgba(255,255,255,0.85)" fill="rgba(255,255,255,0.5)" />
+                  </div>
+
+                  <p style={{ fontSize: "clamp(10px,2.8vw,12px)", color: "rgba(43,40,32,0.7)", marginBottom: 2 }}>
+                    Yth. Bapak/Ibu/Saudara/i
+                  </p>
+                  <p className="font-display" style={{ fontSize: "clamp(15px,4.5vw,18px)", color: palette.forest }}>
+                    {guestName || "Tamu Undangan"}
+                  </p>
                 </div>
-
-                <p style={{ fontSize: "clamp(10px,2.8vw,12px)", color: "rgba(43,40,32,0.7)", marginBottom: 2 }}>
-                  Yth. Bapak/Ibu/Saudara/i
-                </p>
-                <p className="font-display" style={{ fontSize: "clamp(15px,4.5vw,18px)", color: palette.forest }}>
-                  {guestName || "Tamu Undangan"}
-                </p>
               </div>
-            </div>
 
-            <button
-              onClick={openInvitation}
-              type="button"
-              className="btn-primary flex items-center justify-center gap-2"
-              style={{
-                marginTop: 16,
-                padding: "11px 0",
-                borderRadius: 999,
-                fontSize: "clamp(11px,2.8vw,13px)",
-                letterSpacing: "0.15em",
-                background: palette.gold,
-                color: "#fff",
-                border: "none",
-                cursor: "pointer",
-                width: "100%",
-              }}
-            >
-              <Mail size={13} /> OPEN THE ENVELOPE
-            </button>
+              <button
+                onClick={openInvitation}
+                type="button"
+                className="btn-primary flex items-center justify-center gap-2"
+                style={{
+                  marginTop: 16,
+                  padding: "11px 0",
+                  borderRadius: 999,
+                  fontSize: "clamp(11px,2.8vw,13px)",
+                  letterSpacing: "0.15em",
+                  background: palette.gold,
+                  color: "#fff",
+                  border: "none",
+                  cursor: "pointer",
+                  width: "100%",
+                }}
+              >
+                <Mail size={13} /> OPEN THE ENVELOPE
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -639,9 +699,17 @@ const [giftOpen, setGiftOpen] = useState(false);
           {/* Floating mini video player */}
           {floating && (
             <div style={{ position: "fixed", bottom: 18, right: 18, zIndex: 50, width: 150, borderRadius: 14, overflow: "hidden", boxShadow: "0 14px 34px rgba(0,0,0,0.35)", border: `2px solid ${palette.cream}` }}>
-              <div style={{ position: "relative", aspectRatio: "9/16", background: "#000" }}>
-                <div className="yt-cover-mini">
-                  <div id="yt-float-player" />
+              <div ref={floatBoxRef} style={{ position: "relative", aspectRatio: "9/16", background: "#000", overflow: "hidden" }}>
+                <div
+                  style={{
+                    position: "absolute", top: "50%", left: "50%",
+                    width: floatDims.width ? `${floatDims.width}px` : "100%",
+                    height: floatDims.height ? `${floatDims.height}px` : "100%",
+                    transform: "translate(-50%, -50%)",
+                    pointerEvents: "none",
+                  }}
+                >
+                  <div id="yt-float-player" style={{ width: "100%", height: "100%" }} />
                 </div>
                 <div style={{ position: "absolute", bottom: 6, left: 6, right: 6, display: "flex", gap: 6, justifyContent: "flex-end" }}>
                   <button onClick={toggleMute} style={{ background: "rgba(0,0,0,0.45)", borderRadius: 999, width: 26, height: 26 }} className="flex items-center justify-center">
@@ -664,8 +732,17 @@ const [giftOpen, setGiftOpen] = useState(false);
                 backgroundSize: "cover", backgroundPosition: "center",
               }}
             />
-            <div className="yt-cover-hero">
-              <div id="yt-hero-player" />
+            <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+              <div
+                style={{
+                  position: "absolute", top: "50%", left: "50%",
+                  width: heroDims.width ? `${heroDims.width}px` : "100%",
+                  height: heroDims.height ? `${heroDims.height}px` : "100%",
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                <div id="yt-hero-player" style={{ width: "100%", height: "100%" }} />
+              </div>
             </div>
             <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(20,26,16,0.15), rgba(20,26,16,0.55) 85%)" }} />
             <div style={{ position: "absolute", inset: 0 }} className="flex flex-col items-center justify-end text-center pb-14 px-6">
@@ -730,7 +807,7 @@ const [giftOpen, setGiftOpen] = useState(false);
                 <Reveal key={ev.label}>
                   <button
                     type="button"
-                    onClick={() => setEventOpen(ev)}
+                    onClick={() => scrollTo("lokasi")}
                     style={{
                       border: `1px solid ${palette.gold}`, borderRadius: 18, padding: "28px 24px",
                       background: "#fff", width: "100%", textAlign: "center", cursor: "pointer",
@@ -795,18 +872,16 @@ const [giftOpen, setGiftOpen] = useState(false);
               <h6 className="font-display" style={{ fontSize: "clamp(10px,6vw,15px)", marginTop: 3, color: palette.forest }}>“Photo & Video by Oche & Yoga.”</h6>
             </Reveal>
 
-            <div
-              className="grid gap-3"
-              style={{ maxWidth: 900, margin: "40px auto 0", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}
-            >
+            <div className="gallery-grid" style={{ maxWidth: 900, margin: "40px auto 0" }}>
               {(galleryExpanded ? CONFIG.gallery : CONFIG.gallery.slice(0, GALLERY_PREVIEW_COUNT)).map((src, i) => (
                 <Reveal key={i} delay={(i % 4) * 100}>
                   <button
                     type="button"
                     onClick={() => openLightbox(i)}
+                    className="gallery-item"
                     style={{
                       position: "relative", display: "block", width: "100%", padding: 0, border: 0,
-                      borderRadius: 10, overflow: "hidden", aspectRatio: i % 3 === 0 ? "3/4" : "4/3",
+                      borderRadius: 10, overflow: "hidden",
                       cursor: "pointer", background: "none",
                     }}
                     aria-label={`Lihat foto ${i + 1}`}
@@ -984,150 +1059,150 @@ const [giftOpen, setGiftOpen] = useState(false);
           </section>
 
          {/* ================= WEDDING GIFT ================= */}
-<section id="hadiah" style={{ padding: "90px 24px", textAlign: "center" }}>
-  <Reveal>
-    <Gift size={26} color={palette.gold} style={{ margin: "0 auto" }} />
-    <p className="font-display italic" style={{ fontSize: 40, letterSpacing: "0.2em", color: palette.gold, marginTop: 10 }}>Wedding Gift</p>
+          <section id="hadiah" style={{ padding: "90px 24px", textAlign: "center" }}>
+            <Reveal>
+              <Gift size={26} color={palette.gold} style={{ margin: "0 auto" }} />
+              <p className="font-display italic" style={{ fontSize: 40, letterSpacing: "0.2em", color: palette.gold, marginTop: 10 }}>Wedding Gift</p>
 
-    <p style={{ maxWidth: 480, margin: "12px auto 0", fontSize: 13.5, color: "rgba(43,40,32,0.7)", lineHeight: 1.7 }}>
-      Doa Restu Anda merupakan karunia yang sangat berarti bagi kami. Namun jika memberi adalah ungkapan tanda kasih Anda, kami akan senang hati menerimanya yang tentu akan semakin melengkapi kebahagiaan kami.
-    </p>
-  </Reveal>
+              <p style={{ maxWidth: 480, margin: "12px auto 0", fontSize: 13.5, color: "rgba(43,40,32,0.7)", lineHeight: 1.7 }}>
+                Doa Restu Anda merupakan karunia yang sangat berarti bagi kami. Namun jika memberi adalah ungkapan tanda kasih Anda, kami akan senang hati menerimanya yang tentu akan semakin melengkapi kebahagiaan kami.
+              </p>
+            </Reveal>
 
-  {/* Tombol amplop — klik untuk buka popup no. rekening */}
-  <Reveal>
-    <button
-      type="button"
-      onClick={() => setGiftOpen(true)}
-      style={{
-        marginTop: 36,
-        display: "inline-flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 10,
-        background: "none",
-        border: "none",
-        cursor: "pointer",
-      }}
-    >
-      <div
-        style={{
-          position: "relative",
-          width: 220,
-          height: 140,
-          background: "#f4f1e8",
-          borderRadius: 6,
-          boxShadow: "0 14px 34px rgba(0,0,0,0.18)",
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute", top: 0, left: 0, width: "100%", height: 0,
-            borderLeft: "110px solid transparent",
-            borderRight: "110px solid transparent",
-            borderTop: "70px solid rgba(0,0,0,0.06)",
-          }}
-        />
-        <svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 70 }} viewBox="0 0 220 70" preserveAspectRatio="none">
-          <line x1="0" y1="0" x2="110" y2="65" stroke="rgba(0,0,0,0.15)" strokeWidth="1" />
-          <line x1="220" y1="0" x2="110" y2="65" stroke="rgba(0,0,0,0.15)" strokeWidth="1" />
-        </svg>
-        <div
-          style={{
-            position: "absolute", top: "58%", left: "50%", transform: "translate(-50%,-50%)",
-            width: 40, height: 40, borderRadius: "50%",
-            background: "radial-gradient(circle at 35% 30%, #b5443a, #7a1f1f)",
-            boxShadow: "0 3px 8px rgba(0,0,0,0.35)",
-          }}
-          className="flex items-center justify-center"
-        >
-          <Heart size={16} color="rgba(255,255,255,0.85)" fill="rgba(255,255,255,0.5)" />
-        </div>
-      </div>
-      <span className="btn-outline" style={{ padding: "10px 24px", borderRadius: 999, fontSize: 12.5, letterSpacing: "0.1em" }}>
-        BUKA AMPLOP DIGITAL
-      </span>
-    </button>
-  </Reveal>
-</section>
+            {/* Tombol amplop — klik untuk buka popup no. rekening */}
+            <Reveal>
+              <button
+                type="button"
+                onClick={() => setGiftOpen(true)}
+                style={{
+                  marginTop: 36,
+                  display: "inline-flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: 10,
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                }}
+              >
+                <div
+                  style={{
+                    position: "relative",
+                    width: 220,
+                    height: 140,
+                    background: "#f4f1e8",
+                    borderRadius: 6,
+                    boxShadow: "0 14px 34px rgba(0,0,0,0.18)",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      position: "absolute", top: 0, left: 0, width: "100%", height: 0,
+                      borderLeft: "110px solid transparent",
+                      borderRight: "110px solid transparent",
+                      borderTop: "70px solid rgba(0,0,0,0.06)",
+                    }}
+                  />
+                  <svg style={{ position: "absolute", top: 0, left: 0, width: "100%", height: 70 }} viewBox="0 0 220 70" preserveAspectRatio="none">
+                    <line x1="0" y1="0" x2="110" y2="65" stroke="rgba(0,0,0,0.15)" strokeWidth="1" />
+                    <line x1="220" y1="0" x2="110" y2="65" stroke="rgba(0,0,0,0.15)" strokeWidth="1" />
+                  </svg>
+                  <div
+                    style={{
+                      position: "absolute", top: "58%", left: "50%", transform: "translate(-50%,-50%)",
+                      width: 40, height: 40, borderRadius: "50%",
+                      background: "radial-gradient(circle at 35% 30%, #b5443a, #7a1f1f)",
+                      boxShadow: "0 3px 8px rgba(0,0,0,0.35)",
+                    }}
+                    className="flex items-center justify-center"
+                  >
+                    <Heart size={16} color="rgba(255,255,255,0.85)" fill="rgba(255,255,255,0.5)" />
+                  </div>
+                </div>
+                <span className="btn-outline" style={{ padding: "10px 24px", borderRadius: 999, fontSize: 12.5, letterSpacing: "0.1em" }}>
+                  BUKA AMPLOP DIGITAL
+                </span>
+              </button>
+            </Reveal>
+          </section>
 
-{/* ================= GIFT MODAL POPUP ================= */}
-{giftOpen && (
-  
-  <div
-    onClick={() => setGiftOpen(false)}
-    style={{
-      position: "fixed", inset: 0, zIndex: 80,
-      background: "rgba(10,13,8,0.7)",
-      display: "flex", alignItems: "center", justifyContent: "center",
-      padding: 20,
-    }}
-  >
-    <div
-      onClick={(e) => e.stopPropagation()}
-      style={{
-        background: palette.cream,
-        borderRadius: 18,
-        padding: "36px 26px",
-        maxWidth: 440,
-        width: "100%",
-        maxHeight: "85vh",
-        overflowY: "auto",
-        position: "relative",
-        boxShadow: "0 30px 70px rgba(0,0,0,0.4)",
-      }}
-    >
-      <button
-        onClick={() => setGiftOpen(false)}
-        aria-label="Tutup"
-        style={{
-          position: "absolute", top: 14, right: 14, width: 36, height: 36, borderRadius: 999,
-          background: "rgba(37,50,31,0.08)", border: "none",
-        }}
-        className="flex items-center justify-center"
-      >
-        <X size={16} color={palette.forest} />
-      </button>
+          {/* ================= GIFT MODAL POPUP ================= */}
+          {giftOpen && (
+            
+            <div
+              onClick={() => setGiftOpen(false)}
+              style={{
+                position: "fixed", inset: 0, zIndex: 80,
+                background: "rgba(10,13,8,0.7)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                padding: 20,
+              }}
+            >
+              <div
+                onClick={(e) => e.stopPropagation()}
+                style={{
+                  background: palette.cream,
+                  borderRadius: 18,
+                  padding: "36px 26px",
+                  maxWidth: 440,
+                  width: "100%",
+                  maxHeight: "85vh",
+                  overflowY: "auto",
+                  position: "relative",
+                  boxShadow: "0 30px 70px rgba(0,0,0,0.4)",
+                }}
+              >
+                <button
+                  onClick={() => setGiftOpen(false)}
+                  aria-label="Tutup"
+                  style={{
+                    position: "absolute", top: 14, right: 14, width: 36, height: 36, borderRadius: 999,
+                    background: "rgba(37,50,31,0.08)", border: "none",
+                  }}
+                  className="flex items-center justify-center"
+                >
+                  <X size={16} color={palette.forest} />
+                </button>
 
-      <div className="text-center" style={{ marginBottom: 24 }}>
-        <Gift size={22} color={palette.gold} style={{ margin: "0 auto" }} />
-        <p className="font-display italic" style={{ fontSize: 24, color: palette.gold, marginTop: 8 }}>Wedding Gift</p>
-      </div>
+                <div className="text-center" style={{ marginBottom: 24 }}>
+                  <Gift size={22} color={palette.gold} style={{ margin: "0 auto" }} />
+                  <p className="font-display italic" style={{ fontSize: 24, color: palette.gold, marginTop: 8 }}>Wedding Gift</p>
+                </div>
 
-      <div className="flex flex-col gap-4">
-        <div style={{ border: `1px solid ${palette.gold}`, borderRadius: 14, padding: "18px 20px", textAlign: "left" }} className="flex items-center justify-between">
-          <div>
-            <p style={{ fontSize: 11, letterSpacing: "0.1em", color: "rgba(43,40,32,0.5)" }}>{CONFIG.gifts.bank.bankName}</p>
-            <p style={{ fontSize: 16, marginTop: 3, fontWeight: 500 }}>{CONFIG.gifts.bank.accountNumber}</p>
-            <p style={{ fontSize: 12.5, color: "rgba(43,40,32,0.6)" }}>{CONFIG.gifts.bank.accountName}</p>
-          </div>
-          <button
-            onClick={() => copy(CONFIG.gifts.bank.accountNumber, "bank")}
-            className="btn-outline flex items-center gap-1"
-            style={{ padding: "8px 14px", borderRadius: 999, fontSize: 12, flexShrink: 0 }}
-          >
-            {copiedKey === "bank" ? <Check size={13} /> : <Copy size={13} />} {copiedKey === "bank" ? "Tersalin" : "Salin"}
-          </button>
-        </div>
+                <div className="flex flex-col gap-4">
+                  <div style={{ border: `1px solid ${palette.gold}`, borderRadius: 14, padding: "18px 20px", textAlign: "left" }} className="flex items-center justify-between">
+                    <div>
+                      <p style={{ fontSize: 11, letterSpacing: "0.1em", color: "rgba(43,40,32,0.5)" }}>{CONFIG.gifts.bank.bankName}</p>
+                      <p style={{ fontSize: 16, marginTop: 3, fontWeight: 500 }}>{CONFIG.gifts.bank.accountNumber}</p>
+                      <p style={{ fontSize: 12.5, color: "rgba(43,40,32,0.6)" }}>{CONFIG.gifts.bank.accountName}</p>
+                    </div>
+                    <button
+                      onClick={() => copy(CONFIG.gifts.bank.accountNumber, "bank")}
+                      className="btn-outline flex items-center gap-1"
+                      style={{ padding: "8px 14px", borderRadius: 999, fontSize: 12, flexShrink: 0 }}
+                    >
+                      {copiedKey === "bank" ? <Check size={13} /> : <Copy size={13} />} {copiedKey === "bank" ? "Tersalin" : "Salin"}
+                    </button>
+                  </div>
 
-        <div style={{ border: `1px solid ${palette.gold}`, borderRadius: 14, padding: "18px 20px", textAlign: "left" }} className="flex items-center justify-between">
-          <div>
-            <p style={{ fontSize: 11, letterSpacing: "0.1em", color: "rgba(43,40,32,0.5)" }}>{CONFIG.gifts.address.label.toUpperCase()}</p>
-            <p style={{ fontSize: 13, marginTop: 4, lineHeight: 1.6 }}>{CONFIG.gifts.address.text}</p>
-          </div>
-          <button
-            onClick={() => copy(CONFIG.gifts.address.text, "addr")}
-            className="btn-outline flex items-center gap-1"
-            style={{ padding: "8px 14px", borderRadius: 999, fontSize: 12, flexShrink: 0, marginLeft: 12 }}
-          >
-            {copiedKey === "addr" ? <Check size={13} /> : <Copy size={13} />} {copiedKey === "addr" ? "Tersalin" : "Salin"}
-          </button>
-        </div>
-      </div>
-    </div>
-  </div>
-)}
+                  <div style={{ border: `1px solid ${palette.gold}`, borderRadius: 14, padding: "18px 20px", textAlign: "left" }} className="flex items-center justify-between">
+                    <div>
+                      <p style={{ fontSize: 11, letterSpacing: "0.1em", color: "rgba(43,40,32,0.5)" }}>{CONFIG.gifts.address.label.toUpperCase()}</p>
+                      <p style={{ fontSize: 13, marginTop: 4, lineHeight: 1.6 }}>{CONFIG.gifts.address.text}</p>
+                    </div>
+                    <button
+                      onClick={() => copy(CONFIG.gifts.address.text, "addr")}
+                      className="btn-outline flex items-center gap-1"
+                      style={{ padding: "8px 14px", borderRadius: 999, fontSize: 12, flexShrink: 0, marginLeft: 12 }}
+                    >
+                      {copiedKey === "addr" ? <Check size={13} /> : <Copy size={13} />} {copiedKey === "addr" ? "Tersalin" : "Salin"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
           {/* ================= FOOTER ================= */}
           <footer style={{ padding: "70px 24px", textAlign: "center", background: palette.forest, color: "rgba(246,242,232,0.7)" }}>
             <Sprig color={palette.gold} />
