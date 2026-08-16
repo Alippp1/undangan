@@ -1530,7 +1530,7 @@ const [giftOpen, setGiftOpen] = useState(false);
               <Sprig color={palette.gold} />
             </Reveal>
             <PopReveal as="h3" className="font-script" delay={100} style={{ fontSize: 42, color: "#fff", marginTop: 14 }}>
-              {CONFIG.groom.name} &amp; {CONFIG.bride.name}
+             {CONFIG.bride.name}  &amp;  {CONFIG.groom.name} 
             </PopReveal>
             <PopReveal as="p" delay={220}>
               <span style={{ fontSize: 12.5, marginTop: 10, maxWidth: 380, margin: "10px auto 0", lineHeight: 1.8, display: "inline-block" }}>
