@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Heart, MapPin, Calendar, Gift, Copy, Check, Volume2, VolumeX,
   ChevronDown, Instagram, Navigation, X, Menu, Play, Pause, Send, Image as ImageIcon, Mail,
-  ChevronLeft, ChevronRight, Expand
+  ChevronLeft, ChevronRight, Expand, Bell
 } from "lucide-react";
 /* ============================================================
    CONFIG — edit everything here. Nothing else needs to change.
@@ -30,16 +30,16 @@ const CONFIG = {
   loveNote: "Dengan segala puji bagi Allah yang telah menciptakan makhluk-Nya berpasang-pasangan, Ya Allah izinkanlah kami merangkaikan cinta yang Engkau berikan dalam ikatan pernikahan.",
   akad: {
     label: "Akad Nikah",
-    date: "2026-02-14T08:00:00",
+    date: "2026-09-05T15:30:00",
     dateDisplay: "Sabtu, 5 september 2026",
     time: "15.30 – 17.30 WIB",
     address: "BUMI SAMAMI\Jl. Terusan Cigadung No.15, Sekeloa, Kecamatan Coblong, Kota Bandung, Jawa Barat 401",
   },
   resepsi: {
     label: "Resepsi",
-    date: "2026-02-14T11:00:00",
+    date: "2026-09-05T19:00:00",
     dateDisplay: "Sabtu, 5 september 2026",
-    time: "11.00 – 14.00 WIB",
+    time: "19:00 – 21:00 WIB",
     address: "BUMI SAMAMI\Jl. Terusan Cigadung No.15, Sekeloa, Kecamatan Coblong, Kota Bandung, Jawa Barat 401",
   },
 
@@ -134,6 +134,38 @@ function loadYouTubeIframeAPI() {
 }
 
 /* ============================================================
+   Google Calendar helper
+   ============================================================ */
+// CONFIG.akad.date ditulis sebagai jam lokal WIB (mis. "2026-02-14T08:00:00"),
+// TANPA info zona waktu. Supaya link "Ingatkan Acara" tetap benar buat siapa
+// pun yang buka undangan (dari HP dengan zona waktu manapun), kita anggap
+// string itu selalu jam WIB (UTC+7) dan konversi manual ke UTC — bukan pakai
+// `new Date(...)` polos yang bisa salah baca sebagai jam lokal si pengunjung.
+function wibStringToUTCDate(localISOString, tzOffsetHours = 7) {
+  const m = localISOString.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/);
+  if (!m) return new Date(localISOString);
+  const [, y, mo, d, h, mi, s] = m.map(Number);
+  return new Date(Date.UTC(y, mo - 1, d, h - tzOffsetHours, mi, s));
+}
+
+function formatGCalUTC(date) {
+  return date.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+}
+
+function buildGoogleCalendarUrl({ title, startISO, durationHours = 2, details = "", location = "" }) {
+  const start = wibStringToUTCDate(startISO);
+  const end = new Date(start.getTime() + durationHours * 3600 * 1000);
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: title,
+    dates: `${formatGCalUTC(start)}/${formatGCalUTC(end)}`,
+    details,
+    location,
+  });
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
+}
+
+/* ============================================================
    Small helpers
    ============================================================ */
 function useCountdown(targetISO) {
@@ -186,6 +218,31 @@ function Reveal({ children, className = "", delay = 0 }) {
     >
       {children}
     </div>
+  );
+}
+
+/* PopReveal — dipakai khusus untuk teks (judul, label, paragraf).
+   Beda dengan Reveal biasa (fade + geser halus), PopReveal membesar
+   dari kecil ke ukuran normal dengan sedikit "overshoot" (efek pop)
+   memakai cubic-bezier pegas, jadi terasa seperti teks "muncul"
+   satu-satu saat di-scroll, bukan cuma satu blok besar yang fade. */
+function PopReveal({ children, className = "", delay = 0, as = "div", style = {} }) {
+  const [ref, shown] = useReveal();
+  const Tag = as;
+  return (
+    <Tag
+      ref={ref}
+      className={className}
+      style={{
+        ...style,
+        opacity: shown ? 1 : 0,
+        transform: shown ? "translateY(0) scale(1)" : "translateY(18px) scale(0.82)",
+        transition: `opacity 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) ${delay}ms, transform 0.65s cubic-bezier(0.34, 1.56, 0.64, 1) ${delay}ms`,
+        willChange: "transform, opacity",
+      }}
+    >
+      {children}
+    </Tag>
   );
 }
 
@@ -257,9 +314,21 @@ const [copiedKey, setCopiedKey] = useState("");
 const [giftOpen, setGiftOpen] = useState(false);
   const [rsvp, setRsvp] = useState({ name: "", attend: "", message: "" });
   const [rsvpSent, setRsvpSent] = useState(false);
-  const [wishes, setWishes] = useState([
-    { name: "Dinda & Fajar", attend: "Hadir", message: "Selamat menempuh hidup baru! Semoga sakinah mawaddah warahmah 🤍" },
-  ]);
+  const [rsvpSubmitting, setRsvpSubmitting] = useState(false);
+  const [rsvpError, setRsvpError] = useState("");
+  const [wishes, setWishes] = useState([]);
+  const [wishesLoading, setWishesLoading] = useState(true);
+
+  // Ambil ucapan yang sudah tersimpan di database (Vercel KV) begitu halaman dibuka,
+  // supaya semua tamu melihat daftar ucapan yang sama — bukan cuma yang ada di
+  // memori browser masing-masing.
+  useEffect(() => {
+    fetch("/api/rsvp")
+      .then((r) => r.json())
+      .then((data) => setWishes(Array.isArray(data.wishes) ? data.wishes : []))
+      .catch(() => {})
+      .finally(() => setWishesLoading(false));
+  }, []);
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState("");
 
@@ -308,6 +377,13 @@ const [giftOpen, setGiftOpen] = useState(false);
   const bgAudioRef = useRef(null);
 
   const akadLeft = useCountdown(CONFIG.akad.date);
+  const akadCalendarUrl = buildGoogleCalendarUrl({
+    title: `Akad Nikah ${CONFIG.groom.name} & ${CONFIG.bride.name}`,
+    startISO: CONFIG.akad.date,
+    durationHours: 2,
+    details: `Akad Nikah ${CONFIG.groom.name} & ${CONFIG.bride.name}`,
+    location: CONFIG.venue.address,
+  });
 
   // Ukuran "cover" video YouTube dihitung dari ukuran asli container
   // (bukan vw/vh) supaya tidak kebesaran/terzoom aneh di layar HP.
@@ -450,13 +526,28 @@ const [giftOpen, setGiftOpen] = useState(false);
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
   };
 
-  const submitRsvp = (e) => {
+  const submitRsvp = async (e) => {
     e.preventDefault();
     if (!rsvp.name || !rsvp.attend) return;
-    setWishes((w) => [{ name: rsvp.name, attend: rsvp.attend, message: rsvp.message }, ...w]);
-    setRsvp({ name: "", attend: "", message: "" });
-    setRsvpSent(true);
-    setTimeout(() => setRsvpSent(false), 2500);
+    setRsvpError("");
+    setRsvpSubmitting(true);
+    try {
+      const res = await fetch("/api/rsvp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rsvp),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Gagal mengirim");
+      setWishes((w) => [data.entry, ...w]);
+      setRsvp({ name: "", attend: "", message: "" });
+      setRsvpSent(true);
+      setTimeout(() => setRsvpSent(false), 2500);
+    } catch (err) {
+      setRsvpError("Gagal mengirim ucapan. Coba lagi ya.");
+    } finally {
+      setRsvpSubmitting(false);
+    }
   };
 
   const findDirections = () => {
@@ -538,6 +629,31 @@ const [giftOpen, setGiftOpen] = useState(false);
           .gallery-grid { grid-template-columns: repeat(4, 1fr); gap: 14px; }
         }
         .gallery-item { aspect-ratio: 3 / 4; }
+
+        /* Countdown Save the Date — 4 kotak menyamping (hari | jam | menit | detik) */
+        .countdown-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 10px;
+          max-width: 480px;
+          margin: 0 auto;
+        }
+        .countdown-box {
+          background: #fff;
+          border: 1px solid ${palette.gold};
+          border-radius: 14px;
+          padding: 14px 4px 12px;
+          box-shadow: 0 6px 18px rgba(37,50,31,0.06);
+        }
+        @media (min-width: 480px) {
+          .countdown-grid { gap: 16px; }
+          .countdown-box { border-radius: 16px; padding: 18px 6px 14px; }
+        }
+
+        /* Hormati preferensi user yang mematikan animasi di sistemnya */
+        @media (prefers-reduced-motion: reduce) {
+          * { transition-duration: 0.01ms !important; }
+        }
       `}</style>
 
       {/* Musik latar — auto-play saat amplop dibuka, otomatis mengulang saat selesai */}
@@ -615,7 +731,7 @@ const [giftOpen, setGiftOpen] = useState(false);
                     The Wedding of
                   </p>
 
-                  <h3 className="font-display italic" style={{ fontSize: "clamp(20px,6vw,26px)", color: palette.gold, margin: "3px 0 12px" }}>
+                  <h3 className="font-script" style={{ fontSize: "clamp(26px,8vw,34px)", color: palette.gold, margin: "3px 0 12px" }}>
                     {CONFIG.groom.name} &amp; {CONFIG.bride.name}
                   </h3>
 
@@ -747,7 +863,7 @@ const [giftOpen, setGiftOpen] = useState(false);
             <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(20,26,16,0.15), rgba(20,26,16,0.55) 85%)" }} />
             <div style={{ position: "absolute", inset: 0 }} className="flex flex-col items-center justify-end text-center pb-14 px-6">
               <p className="font-display italic" style={{ color: palette.cream, fontSize: 13, letterSpacing: "0.25em" }}>THE WEDDING OF</p>
-              <h1 className="font-display" style={{ color: "#fff", fontSize: "clamp(44px,10vw,72px)", margin: "8px 0" }}>
+              <h1 className="font-script" style={{ color: "#fff", fontSize: "clamp(52px,13vw,92px)", margin: "8px 0" }}>
                 {CONFIG.groom.name} &amp; {CONFIG.bride.name}
               </h1>
               <button onClick={toggleMute} className="flex items-center gap-2" style={{ marginTop: 10, color: "#E7DFC6", fontSize: 12, letterSpacing: "0.1em", pointerEvents: "auto" }}>
@@ -761,50 +877,114 @@ const [giftOpen, setGiftOpen] = useState(false);
           <section style={{ padding: "88px 24px", textAlign: "center", background: palette.creamDeep }}>
             <Reveal>
               <Sprig color={palette.sage} />
-              <p className="font-display italic" style={{ fontSize: "clamp(20px,4vw,28px)", maxWidth: 640, margin: "20px auto 0", lineHeight: 1.5, color: palette.forest }}>
-                &ldquo;{CONFIG.quote.text}&rdquo;
-              </p>
-              <p style={{ marginTop: 14, fontSize: 12, letterSpacing: "0.15em", color: palette.gold }}>{CONFIG.quote.source}</p>
             </Reveal>
+            <PopReveal as="p" delay={100} className="font-display italic" >
+              <span style={{ fontSize: "clamp(20px,4vw,28px)", maxWidth: 640, margin: "20px auto 0", lineHeight: 1.5, color: palette.forest, display: "inline-block" }}>
+                &ldquo;{CONFIG.quote.text}&rdquo;
+              </span>
+            </PopReveal>
+            <PopReveal as="p" delay={280}>
+              <span style={{ marginTop: 14, fontSize: 12, letterSpacing: "0.15em", color: palette.gold, display: "inline-block" }}>{CONFIG.quote.source}</span>
+            </PopReveal>
           </section>
 
           {/* ================= COUPLE ================= */}
           <section id="couple" style={{ padding: "90px 24px", background: palette.forest, color: palette.cream }}>
-            <Reveal className="text-center">
-              <p className="font-display italic" style={{ color: palette.gold, fontSize: 14, letterSpacing: "0.2em" }}>BRIDE &amp; GROOM</p>
-              <p style={{ maxWidth: 560, margin: "18px auto 0", fontSize: 14, lineHeight: 1.9, color: "rgba(246,242,232,0.8)" }}>{CONFIG.loveNote}</p>
-            </Reveal>
+            <div className="text-center">
+              <PopReveal as="p" className="font-display italic" delay={0} style={{ color: palette.gold, fontSize: 14, letterSpacing: "0.2em" }}>
+                BRIDE &amp; GROOM
+              </PopReveal>
+              <PopReveal as="p" delay={160}>
+                <span style={{ maxWidth: 560, margin: "18px auto 0", fontSize: 14, lineHeight: 1.9, color: "rgba(246,242,232,0.8)", display: "inline-block" }}>{CONFIG.loveNote}</span>
+              </PopReveal>
+            </div>
 
             <div className="grid gap-10" style={{ maxWidth: 780, margin: "60px auto 0", gridTemplateColumns: "1fr" }}>
               {[CONFIG.bride, CONFIG.groom].map((p, i) => (
-                <Reveal key={p.name} delay={i * 150}>
-                  <div className="flex flex-col items-center text-center">
+                <div key={p.name} className="flex flex-col items-center text-center">
+                  <Reveal delay={i * 150}>
                     <div style={{ width: 168, height: 210, borderRadius: "50% 50% 4px 4px / 60% 60% 4px 4px", overflow: "hidden", border: `2px solid ${palette.gold}` }}>
                       <img src={p.photo} alt={p.fullName} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     </div>
-                    <h3 className="font-display" style={{ fontSize: 32, marginTop: 18 }}>{p.name}</h3>
-                    <p style={{ fontSize: 14, marginTop: 4, color: "rgba(246,242,232,0.85)" }}>{p.fullName}</p>
-                    <p style={{ fontSize: 12.5, marginTop: 10, color: "rgba(246,242,232,0.6)", whiteSpace: "pre-line", lineHeight: 1.7 }}>{p.parents}</p>
-                    <a href={p.instagram} target="_blank" rel="noreferrer" style={{ marginTop: 12 }} className="flex items-center justify-center">
+                  </Reveal>
+                  <PopReveal as="h3" className="font-display" delay={i * 150 + 120} style={{ fontSize: 32, marginTop: 18 }}>
+                    {p.name}
+                  </PopReveal>
+                  <PopReveal as="p" delay={i * 150 + 220} style={{ fontSize: 14, marginTop: 4, color: "rgba(246,242,232,0.85)" }}>
+                    {p.fullName}
+                  </PopReveal>
+                  <PopReveal as="p" delay={i * 150 + 320} style={{ fontSize: 12.5, marginTop: 10, color: "rgba(246,242,232,0.6)", whiteSpace: "pre-line", lineHeight: 1.7 }}>
+                    {p.parents}
+                  </PopReveal>
+                  <PopReveal delay={i * 150 + 420} style={{ marginTop: 12 }}>
+                    <a href={p.instagram} target="_blank" rel="noreferrer" className="flex items-center justify-center">
                       <span style={{ width: 34, height: 34, borderRadius: 999, border: `1px solid ${palette.gold}` }} className="flex items-center justify-center">
                         <Instagram size={15} color={palette.gold} />
                       </span>
                     </a>
-                  </div>
-                </Reveal>
+                  </PopReveal>
+                </div>
               ))}
             </div>
           </section>
 
           {/* ================= SAVE THE DATE / COUNTDOWN ================= */}
           <section id="acara" style={{ padding: "90px 24px", textAlign: "center" }}>
-            <Reveal>
-              <p className="font-display italic" style={{ fontSize: 14, letterSpacing: "0.2em", color: palette.gold }}>SAVE THE DATE</p>
-              <h2 className="font-display" style={{ fontSize: "clamp(30px,6vw,44px)", marginTop: 8, color: palette.forest }}>{CONFIG.akad.dateDisplay}</h2>
+            <PopReveal as="p" className="font-script" delay={0} style={{ fontSize: "clamp(36px,8vw,52px)", color: palette.gold }}>
+              Save the Date
+            </PopReveal>
+            <PopReveal as="h2" className="font-display" delay={140} style={{ fontSize: "clamp(30px,6vw,44px)", marginTop: 8, color: palette.forest }}>
+              {CONFIG.akad.dateDisplay}
+            </PopReveal>
+
+            {/* Kotak hitung mundur — hari | jam | menit | detik, menyamping.
+                Dihitung otomatis di browser tiap detik dari jam perangkat
+                pengunjung (bukan jam server), jadi tetap akurat walau
+                di-deploy gratis statis ke Vercel. */}
+            <div style={{ marginTop: 44 }}>
+              <div className="countdown-grid">
+                {[
+                  { value: akadLeft.d, label: "Hari" },
+                  { value: akadLeft.h, label: "Jam" },
+                  { value: akadLeft.m, label: "Menit" },
+                  { value: akadLeft.s, label: "Detik" },
+                ].map((item, i) => (
+                  <PopReveal key={item.label} delay={i * 90}>
+                    <div className="countdown-box">
+                      <div className="font-display" style={{ fontSize: "clamp(24px,7vw,36px)", color: palette.forest, lineHeight: 1 }}>
+                        {String(item.value).padStart(2, "0")}
+                      </div>
+                      <div style={{ fontSize: "clamp(9px,2.4vw,11px)", letterSpacing: "0.1em", color: palette.gold, marginTop: 6 }}>
+                        {item.label.toUpperCase()}
+                      </div>
+                    </div>
+                  </PopReveal>
+                ))}
+              </div>
+
+              <PopReveal delay={420} style={{ marginTop: 26 }}>
+                <a
+                  href={akadCalendarUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn-outline flex items-center justify-center gap-2"
+                  style={{
+                    display: "inline-flex",
+                    padding: "12px 28px",
+                    borderRadius: 999,
+                    fontSize: 12.5,
+                    letterSpacing: "0.08em",
+                    background: "transparent",
+                  }}
+                >
+                  <Bell size={14} /> INGATKAN ACARA
+                </a>
+              </PopReveal>
+            </div>
 
             <div className="grid gap-6" style={{ maxWidth: 720, margin: "60px auto 0", gridTemplateColumns: "1fr" }}>
-              {[CONFIG.akad, CONFIG.resepsi].map((ev) => (
-                <Reveal key={ev.label}>
+              {[CONFIG.akad, CONFIG.resepsi].map((ev, i) => (
+                <Reveal key={ev.label} delay={i * 120}>
                   <button
                     type="button"
                     onClick={() => scrollTo("lokasi")}
@@ -814,25 +994,38 @@ const [giftOpen, setGiftOpen] = useState(false);
                     }}
                   >
                     <Calendar size={20} color={palette.gold} />
-                    <h3 className="font-display" style={{ fontSize: 24, marginTop: 10, color: palette.forest }}>{ev.label}</h3>
-                    <p style={{ fontSize: 13.5, marginTop: 6, color: palette.ink }}>{ev.dateDisplay}</p>
-                    <p style={{ fontSize: 13.5, color: "rgba(43,40,32,0.65)" }}>{ev.time}</p>
-                    <p style={{ fontSize: 11.5, marginTop: 10, color: palette.gold, letterSpacing: "0.08em" }}>LIHAT LOKASI</p>
+                    <PopReveal as="h3" className="font-script" delay={i * 120 + 100} style={{ fontSize: 40, marginTop: 10, color: palette.forest }}>
+                      {ev.label}
+                    </PopReveal>
+                    <PopReveal as="p" delay={i * 120 + 200} style={{ fontSize: 13.5, marginTop: 6, color: palette.ink }}>
+                      {ev.dateDisplay}
+                    </PopReveal>
+                    <PopReveal as="p" delay={i * 120 + 300} style={{ fontSize: 13.5, color: "rgba(43,40,32,0.65)" }}>
+                      {ev.time}
+                    </PopReveal>
+                    <PopReveal as="p" delay={i * 120 + 400} style={{ fontSize: 11.5, marginTop: 10, color: palette.gold, letterSpacing: "0.08em" }}>
+                      LIHAT LOKASI
+                    </PopReveal>
                   </button>
                 </Reveal>
               ))}
             </div>
-            </Reveal>
           </section>
           
 
           {/* ================= LOCATION / MAP ================= */}
           <section id="lokasi" style={{ padding: "90px 24px", background: palette.creamDeep }}>
-            <Reveal className="text-center">
-              <p className="font-display italic" style={{ fontSize: 14, letterSpacing: "0.2em", color: palette.gold }}>LOKASI ACARA</p>
-              <h2 className="font-display" style={{ fontSize: "clamp(28px,6vw,40px)", marginTop: 8, color: palette.forest }}>{CONFIG.venue.name}</h2>
-              <p style={{ maxWidth: 520, margin: "10px auto 0", fontSize: 13.5, color: "rgba(43,40,32,0.7)", lineHeight: 1.7 }}>{CONFIG.venue.address}</p>
-            </Reveal>
+            <div className="text-center">
+              <PopReveal as="p" className="font-display italic" delay={0} style={{ fontSize: 14, letterSpacing: "0.2em", color: palette.gold }}>
+                LOKASI ACARA
+              </PopReveal>
+              <PopReveal as="h2" className="font-display" delay={140} style={{ fontSize: "clamp(28px,6vw,40px)", marginTop: 8, color: palette.forest }}>
+                {CONFIG.venue.name}
+              </PopReveal>
+              <PopReveal as="p" delay={280}>
+                <span style={{ maxWidth: 520, margin: "10px auto 0", fontSize: 13.5, color: "rgba(43,40,32,0.7)", lineHeight: 1.7, display: "inline-block" }}>{CONFIG.venue.address}</span>
+              </PopReveal>
+            </div>
 
             <Reveal>
               <div style={{ maxWidth: 780, margin: "36px auto 0", borderRadius: 18, overflow: "hidden", border: `1px solid ${palette.gold}`, height: 320 }}>
@@ -866,11 +1059,17 @@ const [giftOpen, setGiftOpen] = useState(false);
 
           {/* ================= GALLERY ================= */}
           <section id="galeri" style={{ padding: "90px 24px" }}>
-            <Reveal className="text-center">
-              <p className="font-display italic" style={{ fontSize: 30, letterSpacing: "0.2em", color: palette.gold }}>a Potrait of</p>
-              <h2 className="font-display" style={{ fontSize: "clamp(20px,6vw,25px)", marginTop: 3, color: palette.forest }}>“I was created in time to fill your time, and I use all the time in my live to love you.”</h2>
-              <h6 className="font-display" style={{ fontSize: "clamp(10px,6vw,15px)", marginTop: 3, color: palette.forest }}>“Photo & Video by Oche & Yoga.”</h6>
-            </Reveal>
+            <div className="text-center">
+              <PopReveal as="p" className="font-script" delay={0} style={{ fontSize: 46, color: palette.gold }}>
+                a Potrait of
+              </PopReveal>
+              <PopReveal as="h2" className="font-display" delay={140} style={{ fontSize: "clamp(20px,6vw,25px)", marginTop: 3, color: palette.forest }}>
+                “I was created in time to fill your time, and I use all the time in my live to love you.”
+              </PopReveal>
+              <PopReveal as="h6" className="font-display" delay={280} style={{ fontSize: "clamp(10px,6vw,15px)", marginTop: 3, color: palette.forest }}>
+                “Photo & Video by Oche & Yoga.”
+              </PopReveal>
+            </div>
 
             <div className="gallery-grid" style={{ maxWidth: 900, margin: "40px auto 0" }}>
               {(galleryExpanded ? CONFIG.gallery : CONFIG.gallery.slice(0, GALLERY_PREVIEW_COUNT)).map((src, i) => (
@@ -990,12 +1189,17 @@ const [giftOpen, setGiftOpen] = useState(false);
 
           {/* ================= RSVP ================= */}
           <section id="rsvp" style={{ padding: "90px 24px", background: palette.forest, color: palette.cream }}>
-            <Reveal className="text-center">
-              <p className="font-display italic" style={{ fontSize: 30, letterSpacing: "0.2em", color: palette.gold }}>RSVP &amp; WISHES</p>
-              <h2 className="font-display" style={{ fontSize: "clamp(20px,6vw,20px)", marginTop: 8 }}>Kami ingin menunggu kehadiranmu!</h2>
-                     <h2 className="font-display" style={{ fontSize: "clamp(20px,6vw,20px)", marginTop: 8 }}>
-                     Silahkan isi formulir konfirmasi di bawah ini:</h2>
-            </Reveal>
+            <div className="text-center">
+              <PopReveal as="p" className="font-script" delay={0} style={{ fontSize: 54, color: palette.gold, marginTop: 10 }}>
+                Rsvp & Wishes
+              </PopReveal>
+              <PopReveal as="h2" className="font-display" delay={140} style={{ fontSize: "clamp(20px,6vw,20px)", marginTop: 8 }}>
+                Kami ingin menunggu kehadiranmu!
+              </PopReveal>
+              <PopReveal as="h2" className="font-display" delay={220} style={{ fontSize: "clamp(20px,6vw,20px)", marginTop: 8 }}>
+                Silahkan isi formulir konfirmasi di bawah ini:
+              </PopReveal>
+            </div>
 
             <Reveal>
               <form onSubmit={submitRsvp} style={{ maxWidth: 480, margin: "40px auto 0" }} className="flex flex-col gap-4">
@@ -1035,15 +1239,27 @@ const [giftOpen, setGiftOpen] = useState(false);
                     style={{ width: "100%", marginTop: 6, padding: "12px 14px", borderRadius: 10, color: palette.ink, resize: "none" }}
                   />
                 </div>
-                <button type="submit" className="btn-primary flex items-center justify-center gap-2" style={{ background: palette.gold, padding: "13px 0", borderRadius: 10, fontSize: 13, letterSpacing: "0.08em" }}>
-                  <Send size={14} /> {rsvpSent ? "Terkirim!" : "Kirim Konfirmasi"}
+                {rsvpError && <p style={{ fontSize: 12, color: "#E8A0A0" }}>{rsvpError}</p>}
+                <button
+                  type="submit"
+                  disabled={rsvpSubmitting}
+                  className="btn-primary flex items-center justify-center gap-2"
+                  style={{ background: palette.gold, padding: "13px 0", borderRadius: 10, fontSize: 13, letterSpacing: "0.08em", opacity: rsvpSubmitting ? 0.7 : 1, cursor: rsvpSubmitting ? "default" : "pointer" }}
+                >
+                  <Send size={14} /> {rsvpSubmitting ? "Mengirim..." : rsvpSent ? "Terkirim!" : "Kirim Konfirmasi"}
                 </button>
               </form>
             </Reveal>
 
             <div style={{ maxWidth: 480, margin: "50px auto 0" }} className="flex flex-col gap-4">
+              {wishesLoading && (
+                <p style={{ fontSize: 12.5, textAlign: "center", color: "rgba(246,242,232,0.55)" }}>Memuat ucapan...</p>
+              )}
+              {!wishesLoading && wishes.length === 0 && (
+                <p style={{ fontSize: 12.5, textAlign: "center", color: "rgba(246,242,232,0.55)" }}>Jadilah yang pertama memberi ucapan &amp; doa!</p>
+              )}
               {wishes.map((w, i) => (
-                <Reveal key={i} delay={i * 80}>
+                <Reveal key={w.createdAt || i} delay={Math.min(i, 5) * 80}>
                   <div style={{ background: "rgba(255,255,255,0.06)", borderRadius: 12, padding: "16px 18px" }}>
                     <div className="flex items-center justify-between">
                       <span style={{ fontSize: 13.5, fontWeight: 500 }}>{w.name}</span>
@@ -1062,15 +1278,18 @@ const [giftOpen, setGiftOpen] = useState(false);
           <section id="hadiah" style={{ padding: "90px 24px", textAlign: "center" }}>
             <Reveal>
               <Gift size={26} color={palette.gold} style={{ margin: "0 auto" }} />
-              <p className="font-display italic" style={{ fontSize: 40, letterSpacing: "0.2em", color: palette.gold, marginTop: 10 }}>Wedding Gift</p>
-
-              <p style={{ maxWidth: 480, margin: "12px auto 0", fontSize: 13.5, color: "rgba(43,40,32,0.7)", lineHeight: 1.7 }}>
-                Doa Restu Anda merupakan karunia yang sangat berarti bagi kami. Namun jika memberi adalah ungkapan tanda kasih Anda, kami akan senang hati menerimanya yang tentu akan semakin melengkapi kebahagiaan kami.
-              </p>
             </Reveal>
+            <PopReveal as="p" className="font-script" delay={100} style={{ fontSize: 54, color: palette.gold, marginTop: 10 }}>
+              Wedding Gift
+            </PopReveal>
+            <PopReveal as="p" delay={220}>
+              <span style={{ maxWidth: 480, margin: "12px auto 0", fontSize: 13.5, color: "rgba(43,40,32,0.7)", lineHeight: 1.7, display: "inline-block" }}>
+                Doa Restu Anda merupakan karunia yang sangat berarti bagi kami. Namun jika memberi adalah ungkapan tanda kasih Anda, kami akan senang hati menerimanya yang tentu akan semakin melengkapi kebahagiaan kami.
+              </span>
+            </PopReveal>
 
             {/* Tombol amplop — klik untuk buka popup no. rekening */}
-            <Reveal>
+            <Reveal delay={200}>
               <button
                 type="button"
                 onClick={() => setGiftOpen(true)}
@@ -1167,7 +1386,7 @@ const [giftOpen, setGiftOpen] = useState(false);
 
                 <div className="text-center" style={{ marginBottom: 24 }}>
                   <Gift size={22} color={palette.gold} style={{ margin: "0 auto" }} />
-                  <p className="font-display italic" style={{ fontSize: 24, color: palette.gold, marginTop: 8 }}>Wedding Gift</p>
+                  <p className="font-script" style={{ fontSize: 32, color: palette.gold, marginTop: 8 }}>Wedding Gift</p>
                 </div>
 
                 <div className="flex flex-col gap-4">
@@ -1205,10 +1424,17 @@ const [giftOpen, setGiftOpen] = useState(false);
           )}
           {/* ================= FOOTER ================= */}
           <footer style={{ padding: "70px 24px", textAlign: "center", background: palette.forest, color: "rgba(246,242,232,0.7)" }}>
-            <Sprig color={palette.gold} />
-            <h3 className="font-display" style={{ fontSize: 30, color: "#fff", marginTop: 14 }}>{CONFIG.groom.name} &amp; {CONFIG.bride.name}</h3>
-            <p style={{ fontSize: 12.5, marginTop: 10, maxWidth: 380, margin: "10px auto 0", lineHeight: 1.8 }}>
-Merupakan suatu kehormatan dan kebahagiaan bagi kami, apabila Bapak/Ibu/Saudara/i berkenan hadir di hari bahagia kami.            </p>
+            <Reveal>
+              <Sprig color={palette.gold} />
+            </Reveal>
+            <PopReveal as="h3" className="font-script" delay={100} style={{ fontSize: 42, color: "#fff", marginTop: 14 }}>
+              {CONFIG.groom.name} &amp; {CONFIG.bride.name}
+            </PopReveal>
+            <PopReveal as="p" delay={220}>
+              <span style={{ fontSize: 12.5, marginTop: 10, maxWidth: 380, margin: "10px auto 0", lineHeight: 1.8, display: "inline-block" }}>
+                Merupakan suatu kehormatan dan kebahagiaan bagi kami, apabila Bapak/Ibu/Saudara/i berkenan hadir di hari bahagia kami.
+              </span>
+            </PopReveal>
             <p style={{ fontSize: 10.5, marginTop: 30, letterSpacing: "0.1em", opacity: 0.5 }}>MADE WITH LOVE — {new Date().getFullYear()}</p>
           </footer>
         </>
