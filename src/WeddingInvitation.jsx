@@ -54,7 +54,7 @@ const CONFIG = {
     src: "https://youtu.be/z-Ct1yrE90Q",
     // "poster" HARUS berupa gambar (jpg/png) — dipakai sebagai layar
     // pembuka sebelum video YouTube termuat. Ganti ke foto cover kamu.
-    poster: "/photos/satu.png",
+    // poster: "/photos/satu.png",
     // (opsional) video mp4 yang di-hosting sendiri, dipakai sebagai
     // video latar bergerak di layar amplop sebelum tombol "OPEN THE
     // ENVELOPE" ditekan. Kosongkan jika tidak punya file video ini.
