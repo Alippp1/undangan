@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Heart, MapPin, Calendar, Gift, Copy, Check, Volume2, VolumeX,
   ChevronDown, Instagram, Navigation, X, Menu, Play, Pause, Send, Image as ImageIcon, Mail,
-  ChevronLeft, ChevronRight, Expand, Bell
+  ChevronLeft, ChevronRight, Expand, Bell, Move
 } from "lucide-react";
 /* ============================================================
    CONFIG — edit everything here. Nothing else needs to change.
@@ -302,6 +302,13 @@ const palette = {
 };
 
 /* ============================================================
+   Floating mini player size — diperkecil dari sebelumnya (150px)
+   ============================================================ */
+const FLOAT_WIDTH = 96;
+const FLOAT_HEIGHT = Math.round(FLOAT_WIDTH * (16 / 9)); // rasio 9:16 (portrait)
+const FLOAT_MARGIN = 12;
+
+/* ============================================================
    Main component
    ============================================================ */
 export default function WeddingInvitation() {
@@ -331,6 +338,51 @@ const [giftOpen, setGiftOpen] = useState(false);
   }, []);
   const [locating, setLocating] = useState(false);
   const [locError, setLocError] = useState("");
+
+  /* ---------- Floating player: posisi bisa digeser bebas (drag) ---------- */
+  // null = belum ditentukan; begitu player pertama kali muncul, kita taruh
+  // di pojok kanan-bawah seperti semula, lalu user bebas menggesernya ke
+  // mana saja di layar (mis. supaya tidak menutupi tombol RSVP dsb).
+  const [floatPos, setFloatPos] = useState(null);
+  const dragInfo = useRef({ dragging: false, offsetX: 0, offsetY: 0 });
+
+  const clampFloatPos = useCallback((x, y) => {
+    const maxX = Math.max(FLOAT_MARGIN, window.innerWidth - FLOAT_WIDTH - FLOAT_MARGIN);
+    const maxY = Math.max(FLOAT_MARGIN, window.innerHeight - FLOAT_HEIGHT - FLOAT_MARGIN);
+    return {
+      x: Math.min(Math.max(FLOAT_MARGIN, x), maxX),
+      y: Math.min(Math.max(FLOAT_MARGIN, y), maxY),
+    };
+  }, []);
+
+  const handleFloatPointerDown = (e) => {
+    // Klik tombol mute/play di dalam player tidak boleh memicu drag.
+    if (e.target.closest && e.target.closest("[data-no-drag]")) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    dragInfo.current = {
+      dragging: true,
+      offsetX: e.clientX - rect.left,
+      offsetY: e.clientY - rect.top,
+    };
+    try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+  };
+  const handleFloatPointerMove = (e) => {
+    if (!dragInfo.current.dragging) return;
+    const x = e.clientX - dragInfo.current.offsetX;
+    const y = e.clientY - dragInfo.current.offsetY;
+    setFloatPos(clampFloatPos(x, y));
+  };
+  const handleFloatPointerUp = (e) => {
+    dragInfo.current.dragging = false;
+    try { e.currentTarget.releasePointerCapture(e.pointerId); } catch (err) {}
+  };
+
+  // Jaga posisi tetap dalam layar kalau jendela di-resize (mis. rotasi HP)
+  useEffect(() => {
+    const onResize = () => setFloatPos((p) => (p ? clampFloatPos(p.x, p.y) : p));
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [clampFloatPos]);
 
   // Galeri: berapa foto yang ditampilkan awal, dan index foto yang lagi di-preview (lightbox)
   const GALLERY_PREVIEW_COUNT = 4;
@@ -396,11 +448,20 @@ const [giftOpen, setGiftOpen] = useState(false);
     const onScroll = () => {
       if (!heroRef.current) return;
       const rect = heroRef.current.getBoundingClientRect();
-      setFloating(rect.bottom < 120);
+      const nowFloating = rect.bottom < 120;
+      setFloating(nowFloating);
+      // Begitu player floating pertama kali muncul, taruh di pojok
+      // kanan-bawah — setelah itu posisi mengikuti hasil drag user.
+      if (nowFloating) {
+        setFloatPos((p) => p || clampFloatPos(
+          window.innerWidth - FLOAT_WIDTH - FLOAT_MARGIN,
+          window.innerHeight - FLOAT_HEIGHT - FLOAT_MARGIN
+        ));
+      }
     };
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
-  }, [opened]);
+  }, [opened, clampFloatPos]);
 
   const openInvitation = () => {
     setOpened(true);
@@ -650,6 +711,10 @@ const [giftOpen, setGiftOpen] = useState(false);
           .countdown-box { border-radius: 16px; padding: 18px 6px 14px; }
         }
 
+        /* Player mini floating yang bisa digeser */
+        .float-player-drag { cursor: grab; touch-action: none; }
+        .float-player-drag:active { cursor: grabbing; }
+
         /* Hormati preferensi user yang mematikan animasi di sistemnya */
         @media (prefers-reduced-motion: reduce) {
           * { transition-duration: 0.01ms !important; }
@@ -812,9 +877,27 @@ const [giftOpen, setGiftOpen] = useState(false);
             )}
           </div>
 
-          {/* Floating mini video player */}
-          {floating && (
-            <div style={{ position: "fixed", bottom: 18, right: 18, zIndex: 50, width: 150, borderRadius: 14, overflow: "hidden", boxShadow: "0 14px 34px rgba(0,0,0,0.35)", border: `2px solid ${palette.cream}` }}>
+          {/* Floating mini video player — diperkecil & bisa digeser bebas (drag) */}
+          {floating && floatPos && (
+            <div
+              onPointerDown={handleFloatPointerDown}
+              onPointerMove={handleFloatPointerMove}
+              onPointerUp={handleFloatPointerUp}
+              onPointerCancel={handleFloatPointerUp}
+              className="float-player-drag"
+              style={{
+                position: "fixed",
+                left: floatPos.x,
+                top: floatPos.y,
+                zIndex: 50,
+                width: FLOAT_WIDTH,
+                borderRadius: 12,
+                overflow: "hidden",
+                boxShadow: "0 10px 26px rgba(0,0,0,0.35)",
+                border: `2px solid ${palette.cream}`,
+                userSelect: "none",
+              }}
+            >
               <div ref={floatBoxRef} style={{ position: "relative", aspectRatio: "9/16", background: "#000", overflow: "hidden" }}>
                 <div
                   style={{
@@ -827,12 +910,31 @@ const [giftOpen, setGiftOpen] = useState(false);
                 >
                   <div id="yt-float-player" style={{ width: "100%", height: "100%" }} />
                 </div>
-                <div style={{ position: "absolute", bottom: 6, left: 6, right: 6, display: "flex", gap: 6, justifyContent: "flex-end" }}>
-                  <button onClick={toggleMute} style={{ background: "rgba(0,0,0,0.45)", borderRadius: 999, width: 26, height: 26 }} className="flex items-center justify-center">
-                    {muted ? <VolumeX size={13} color="#fff" /> : <Volume2 size={13} color="#fff" />}
+                {/* Pegangan kecil di pojok atas biar kelihatan bisa digeser */}
+                <div
+                  data-no-drag
+                  style={{ position: "absolute", top: 4, left: 4, opacity: 0.75, pointerEvents: "none" }}
+                >
+                  <Move size={11} color="#fff" />
+                </div>
+                <div style={{ position: "absolute", bottom: 5, left: 5, right: 5, display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                  <button
+                    data-no-drag
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={toggleMute}
+                    style={{ background: "rgba(0,0,0,0.45)", borderRadius: 999, width: 20, height: 20 }}
+                    className="flex items-center justify-center"
+                  >
+                    {muted ? <VolumeX size={10} color="#fff" /> : <Volume2 size={10} color="#fff" />}
                   </button>
-                  <button onClick={togglePlay} style={{ background: "rgba(0,0,0,0.45)", borderRadius: 999, width: 26, height: 26 }} className="flex items-center justify-center">
-                    {playing ? <Pause size={13} color="#fff" /> : <Play size={13} color="#fff" />}
+                  <button
+                    data-no-drag
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={togglePlay}
+                    style={{ background: "rgba(0,0,0,0.45)", borderRadius: 999, width: 20, height: 20 }}
+                    className="flex items-center justify-center"
+                  >
+                    {playing ? <Pause size={10} color="#fff" /> : <Play size={10} color="#fff" />}
                   </button>
                 </div>
               </div>
