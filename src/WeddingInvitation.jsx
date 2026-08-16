@@ -1207,6 +1207,39 @@ const [giftOpen, setGiftOpen] = useState(false);
             )}
           </section>
 
+           {/* ================= HERO VIDEO  ================= */}
+          <section ref={heroRef} style={{ position: "relative", height: "100svh", overflow: "hidden", background: "#141a10" }}>
+            <div
+              style={{
+                position: "absolute", inset: 0,
+                backgroundImage: `url(${CONFIG.heroVideo.poster})`,
+                backgroundSize: "cover", backgroundPosition: "center",
+              }}
+            />
+            <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+              <div
+                style={{
+                  position: "absolute", top: "50%", left: "50%",
+                  width: heroDims.width ? `${heroDims.width}px` : "100%",
+                  height: heroDims.height ? `${heroDims.height}px` : "100%",
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                <div id="yt-hero-player" style={{ width: "100%", height: "100%" }} />
+              </div>
+            </div>
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(20,26,16,0.15), rgba(20,26,16,0.55) 85%)" }} />
+            <div style={{ position: "absolute", inset: 0 }} className="flex flex-col items-center justify-end text-center pb-14 px-6">
+              <p className="font-display italic" style={{ color: palette.cream, fontSize: 13, letterSpacing: "0.25em" }}>THE WEDDING OF</p>
+              <h1 className="font-script" style={{ color: "#fff", fontSize: "clamp(52px,13vw,92px)", margin: "8px 0" }}>
+                {CONFIG.groom.name} &amp; {CONFIG.bride.name}
+              </h1>
+              <button onClick={toggleMute} className="flex items-center gap-2" style={{ marginTop: 10, color: "#E7DFC6", fontSize: 12, letterSpacing: "0.1em", pointerEvents: "auto" }}>
+                {muted ? <VolumeX size={14} /> : <Volume2 size={14} />} {muted ? "Suara mati — tap untuk aktifkan" : "Suara aktif"}
+              </button>
+            </div>
+          </section>
+
           {/* ================= LIGHTBOX PREVIEW ================= */}
           {lightboxIndex !== null && (
             <div
@@ -1517,43 +1550,6 @@ const [giftOpen, setGiftOpen] = useState(false);
             </PopReveal>
             <p style={{ fontSize: 10.5, marginTop: 30, letterSpacing: "0.1em", opacity: 0.5 }}>MADE WITH LOVE — {new Date().getFullYear()}</p>
           </footer>
-
-          {/* ================= HERO VIDEO (di paling bawah) =================
-              Begitu amplop dibuka, versi mini/floating video ini yang langsung
-              tampil di pojok layar (lihat blok floating mini player di atas).
-              Section penuh-layar ini baru "diambil alih" saat user scroll
-              sampai ke paling bawah halaman. */}
-          <section ref={heroRef} style={{ position: "relative", height: "100svh", overflow: "hidden", background: "#141a10" }}>
-            <div
-              style={{
-                position: "absolute", inset: 0,
-                backgroundImage: `url(${CONFIG.heroVideo.poster})`,
-                backgroundSize: "cover", backgroundPosition: "center",
-              }}
-            />
-            <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
-              <div
-                style={{
-                  position: "absolute", top: "50%", left: "50%",
-                  width: heroDims.width ? `${heroDims.width}px` : "100%",
-                  height: heroDims.height ? `${heroDims.height}px` : "100%",
-                  transform: "translate(-50%, -50%)",
-                }}
-              >
-                <div id="yt-hero-player" style={{ width: "100%", height: "100%" }} />
-              </div>
-            </div>
-            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(20,26,16,0.15), rgba(20,26,16,0.55) 85%)" }} />
-            <div style={{ position: "absolute", inset: 0 }} className="flex flex-col items-center justify-end text-center pb-14 px-6">
-              <p className="font-display italic" style={{ color: palette.cream, fontSize: 13, letterSpacing: "0.25em" }}>THE WEDDING OF</p>
-              <h1 className="font-script" style={{ color: "#fff", fontSize: "clamp(52px,13vw,92px)", margin: "8px 0" }}>
-                {CONFIG.groom.name} &amp; {CONFIG.bride.name}
-              </h1>
-              <button onClick={toggleMute} className="flex items-center gap-2" style={{ marginTop: 10, color: "#E7DFC6", fontSize: 12, letterSpacing: "0.1em", pointerEvents: "auto" }}>
-                {muted ? <VolumeX size={14} /> : <Volume2 size={14} />} {muted ? "Suara mati — tap untuk aktifkan" : "Suara aktif"}
-              </button>
-            </div>
-          </section>
         </>
       )}
     </div>
