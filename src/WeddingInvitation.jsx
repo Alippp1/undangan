@@ -442,16 +442,21 @@ const [giftOpen, setGiftOpen] = useState(false);
   const heroDims = useCoverDimensions(heroRef, 16 / 9);
   const floatDims = useCoverDimensions(floatBoxRef, 16 / 9);
 
-  // Scroll → toggle floating mini player once hero is mostly out of view
+  // Section hero (video full-layar) sekarang ada di paling BAWAH halaman
+  // (setelah footer). Begitu amplop dibuka, player floating langsung aktif
+  // di pojok layar (lihat openInvitation) — lalu saat user scroll turun dan
+  // benar-benar sampai di section hero paling bawah, floating dimatikan dan
+  // video full-section itu yang tampil. Kalau user scroll ke atas lagi
+  // sebelum sampai situ, floating aktif lagi — mirip picture-in-picture.
   useEffect(() => {
     if (!opened) return;
     const onScroll = () => {
       if (!heroRef.current) return;
       const rect = heroRef.current.getBoundingClientRect();
-      const nowFloating = rect.bottom < 120;
+      const nowFloating = rect.top > 100;
       setFloating(nowFloating);
-      // Begitu player floating pertama kali muncul, taruh di pojok
-      // kanan-bawah — setelah itu posisi mengikuti hasil drag user.
+      // Begitu player floating aktif, kalau posisinya belum pernah diset,
+      // taruh di pojok kanan-bawah — setelah itu ngikutin hasil drag user.
       if (nowFloating) {
         setFloatPos((p) => p || clampFloatPos(
           window.innerWidth - FLOAT_WIDTH - FLOAT_MARGIN,
@@ -465,6 +470,13 @@ const [giftOpen, setGiftOpen] = useState(false);
 
   const openInvitation = () => {
     setOpened(true);
+    // Langsung aktifkan floating mini player begitu amplop dibuka — user
+    // tidak perlu scroll dulu, videonya langsung nongol floating di pojok.
+    setFloating(true);
+    setFloatPos((p) => p || clampFloatPos(
+      window.innerWidth - FLOAT_WIDTH - FLOAT_MARGIN,
+      window.innerHeight - FLOAT_HEIGHT - FLOAT_MARGIN
+    ));
 
     // Auto-play musik latar begitu amplop dibuka; browser mengizinkan play()
     // karena dipicu langsung dari klik tombol (user gesture).
@@ -797,7 +809,7 @@ const [giftOpen, setGiftOpen] = useState(false);
                   </p>
 
                   <h3 className="font-script" style={{ fontSize: "clamp(26px,8vw,34px)", color: palette.gold, margin: "3px 0 12px" }}>
-                    {CONFIG.bride.name}  &amp;  {CONFIG.groom.name} 
+                    {CONFIG.groom.name} &amp; {CONFIG.bride.name}
                   </h3>
 
                   {/* wax seal */}
@@ -940,40 +952,6 @@ const [giftOpen, setGiftOpen] = useState(false);
               </div>
             </div>
           )}
-
-          {/* ================= HERO VIDEO ================= */}
-          <section ref={heroRef} style={{ position: "relative", height: "100svh", overflow: "hidden", background: "#141a10" }}>
-            <div
-              style={{
-                position: "absolute", inset: 0,
-                backgroundImage: `url(${CONFIG.heroVideo.poster})`,
-                backgroundSize: "cover", backgroundPosition: "center",
-              }}
-            />
-            <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
-              <div
-                style={{
-                  position: "absolute", top: "50%", left: "50%",
-                  width: heroDims.width ? `${heroDims.width}px` : "100%",
-                  height: heroDims.height ? `${heroDims.height}px` : "100%",
-                  transform: "translate(-50%, -50%)",
-                }}
-              >
-                <div id="yt-hero-player" style={{ width: "100%", height: "100%" }} />
-              </div>
-            </div>
-            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(20,26,16,0.15), rgba(20,26,16,0.55) 85%)" }} />
-            <div style={{ position: "absolute", inset: 0 }} className="flex flex-col items-center justify-end text-center pb-14 px-6">
-              <p className="font-display italic" style={{ color: palette.cream, fontSize: 13, letterSpacing: "0.25em" }}>THE WEDDING OF</p>
-              <h1 className="font-script" style={{ color: "#fff", fontSize: "clamp(52px,13vw,92px)", margin: "8px 0" }}>
-                {CONFIG.groom.name} &amp; {CONFIG.bride.name}
-              </h1>
-              <button onClick={toggleMute} className="flex items-center gap-2" style={{ marginTop: 10, color: "#E7DFC6", fontSize: 12, letterSpacing: "0.1em", pointerEvents: "auto" }}>
-                {muted ? <VolumeX size={14} /> : <Volume2 size={14} />} {muted ? "Suara mati — tap untuk aktifkan" : "Suara aktif"}
-              </button>
-              <ChevronDown className="animate-bounce" style={{ marginTop: 22 }} color="#E7DFC6" size={22} />
-            </div>
-          </section>
 
           {/* ================= QUOTE ================= */}
           <section style={{ padding: "88px 24px", textAlign: "center", background: palette.creamDeep }}>
@@ -1530,7 +1508,7 @@ const [giftOpen, setGiftOpen] = useState(false);
               <Sprig color={palette.gold} />
             </Reveal>
             <PopReveal as="h3" className="font-script" delay={100} style={{ fontSize: 42, color: "#fff", marginTop: 14 }}>
-             {CONFIG.bride.name}  &amp;  {CONFIG.groom.name} 
+              {CONFIG.groom.name} &amp; {CONFIG.bride.name}
             </PopReveal>
             <PopReveal as="p" delay={220}>
               <span style={{ fontSize: 12.5, marginTop: 10, maxWidth: 380, margin: "10px auto 0", lineHeight: 1.8, display: "inline-block" }}>
@@ -1539,6 +1517,43 @@ const [giftOpen, setGiftOpen] = useState(false);
             </PopReveal>
             <p style={{ fontSize: 10.5, marginTop: 30, letterSpacing: "0.1em", opacity: 0.5 }}>MADE WITH LOVE — {new Date().getFullYear()}</p>
           </footer>
+
+          {/* ================= HERO VIDEO (di paling bawah) =================
+              Begitu amplop dibuka, versi mini/floating video ini yang langsung
+              tampil di pojok layar (lihat blok floating mini player di atas).
+              Section penuh-layar ini baru "diambil alih" saat user scroll
+              sampai ke paling bawah halaman. */}
+          <section ref={heroRef} style={{ position: "relative", height: "100svh", overflow: "hidden", background: "#141a10" }}>
+            <div
+              style={{
+                position: "absolute", inset: 0,
+                backgroundImage: `url(${CONFIG.heroVideo.poster})`,
+                backgroundSize: "cover", backgroundPosition: "center",
+              }}
+            />
+            <div style={{ position: "absolute", inset: 0, overflow: "hidden", pointerEvents: "none" }}>
+              <div
+                style={{
+                  position: "absolute", top: "50%", left: "50%",
+                  width: heroDims.width ? `${heroDims.width}px` : "100%",
+                  height: heroDims.height ? `${heroDims.height}px` : "100%",
+                  transform: "translate(-50%, -50%)",
+                }}
+              >
+                <div id="yt-hero-player" style={{ width: "100%", height: "100%" }} />
+              </div>
+            </div>
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(180deg, rgba(20,26,16,0.15), rgba(20,26,16,0.55) 85%)" }} />
+            <div style={{ position: "absolute", inset: 0 }} className="flex flex-col items-center justify-end text-center pb-14 px-6">
+              <p className="font-display italic" style={{ color: palette.cream, fontSize: 13, letterSpacing: "0.25em" }}>THE WEDDING OF</p>
+              <h1 className="font-script" style={{ color: "#fff", fontSize: "clamp(52px,13vw,92px)", margin: "8px 0" }}>
+                {CONFIG.groom.name} &amp; {CONFIG.bride.name}
+              </h1>
+              <button onClick={toggleMute} className="flex items-center gap-2" style={{ marginTop: 10, color: "#E7DFC6", fontSize: 12, letterSpacing: "0.1em", pointerEvents: "auto" }}>
+                {muted ? <VolumeX size={14} /> : <Volume2 size={14} />} {muted ? "Suara mati — tap untuk aktifkan" : "Suara aktif"}
+              </button>
+            </div>
+          </section>
         </>
       )}
     </div>
