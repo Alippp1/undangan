@@ -797,7 +797,7 @@ const [giftOpen, setGiftOpen] = useState(false);
                   </p>
 
                   <h3 className="font-script" style={{ fontSize: "clamp(26px,8vw,34px)", color: palette.gold, margin: "3px 0 12px" }}>
-                    {CONFIG.groom.name} &amp; {CONFIG.bride.name}
+                    {CONFIG.bride.name}  &amp;  {CONFIG.groom.name} 
                   </h3>
 
                   {/* wax seal */}
